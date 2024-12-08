@@ -3,6 +3,9 @@ const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
 const mysql = require('mysql2');
+const Redis = require('ioredis');
+
+
 
 
 const app = express();
@@ -16,6 +19,15 @@ const io = new Server(server, {
     origin: 'http://localhost:3000', 
     methods: ['GET', 'POST']
   }
+});
+
+const redis = new Redis({
+  host: 'localhost',   
+  port: 6379,           
+  db: 0                
+});
+redis.on('connect', () => {
+  console.log('Connected to Redis');
 });
 
 const db = mysql.createConnection({
@@ -109,6 +121,26 @@ app.post('/users', (req, res) => {
     res.status(201).json({ message: 'User created successfully', userId: result.insertId });
   });
 });
+app.post('/bid', (req, res) => {
+  const { user_id, auction_id, bid_amount} = req.body;
+
+  // Validate the request body
+  if (!user_id || !auction_id || !bid_amount) {
+    return res.status(400).json({ message: 'user_id, auction_id, bid_amount are required' });
+  }
+
+  const query = `
+    INSERT INTO bids (user_id, auction_id, bid_amount) VALUES (?, ?, ?)
+  `;
+
+  db.query(query, [user_id, auction_id, bid_amount], (err, result) => {
+    if (err) {
+      console.error('Error inserting user:', err);
+      return res.status(500).json({ message: 'Database error' });
+    }
+    res.status(201).json({ message: 'User created successfully', userId: result.insertId });
+  });
+});
 
 // Endpoint to get all auctions
 app.get('/auctions', (req, res) => {
@@ -137,8 +169,25 @@ io.on('connection', (socket) => {
     console.log(`User ${socket.id} left auctionID: ${auctionID}`);
   });
 
-  socket.on('send_message', (data) => {
-    io.to(data.auctionID).emit('receive_message', data);
+  socket.on('place_bid', async({auctionID , user , amount }) => {
+    console.log(auctionID);
+    try{
+      const highestBid = parseFloat(await redis.get(`auction:${auctionID}:highbid`)) || 0;
+      console.log(highestBid,amount);
+      if(amount > highestBid){
+        console.log("implemented");
+        await redis.set(`auction:${auctionID}:highbid`,amount);
+        socket.to(auctionID).emit("highest_bid",amount);
+        console.log("implemented");
+      }
+      console.log(" Not implemented");
+    }catch(err){
+      socket.emit("error", err );
+      console.log(err);
+
+    }
+
+    
   });
 
   socket.on('disconnect', () => {
