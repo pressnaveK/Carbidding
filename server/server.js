@@ -112,7 +112,7 @@ app.post('/users', (req, res) => {
 
 // Endpoint to get all auctions
 app.get('/auctions', (req, res) => {
-  const query = 'SELECT * FROM auctions';
+  const query = 'SELECT * FROM auctions WHERE end_datetime > NOW()';
 
   db.query(query, (err, results) => {
     if (err) {

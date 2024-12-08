@@ -1,0 +1,1 @@
+SELECT * FROM auctions WHERE end_datetime > NOW();
